@@ -1,0 +1,48 @@
+---
+title: "Explore Wiki Page Views Data"
+output: html_notebook
+---
+```{r Load Packages}
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(rvest)
+```
+I found some interesting looking data while looking at [this page](https://en.wikipedia.org/wiki/User:Ilmari_Karonen/First_link) about the Wikipedia First Link story. They mentioned there that you can get a dump of the entire Wikipedia at [dumps.wikimedia.org](dumps.wikimedia.org) which led me (down a windy path) to the Wikipedia [page views data](https://dumps.wikimedia.org/other/pageviews/readme.html).
+
+So naturally I downloaded some (about 200 MB for one hour's data 😐) and before getting too carried away with analysing a whole bunch of time series data I figured I'd explore the stuff that's in the average file by just looking at the one for now.
+
+```{r Download Data}
+wikiPageViewsRaw <- read.table("./inputs/pageviews-20180823-100000", stringsAsFactors = F, sep = " ")
+head(wikiPageViewsRaw)
+```
+
+It's clear enough that this doesn't have any columns but that can be easily addressed using the [very useful information](https://wikitech.wikimedia.org/wiki/Analytics/Data_Lake/Traffic/Pageviews) on Wikimedia's wiki describing how their wiki data is archived. It also mentions that the response size is not reported for views, so we'll get rid of that column too
+
+```{r Fix Column Names and Get Language}
+colnames(wikiPageViewsRaw) <- c("domain_code", "page_title", "count_views", "total_response_size")
+
+temp_wikiPageViews <- wikiPageViewsRaw[,1:3]
+
+getTable <- function(tableNum, url){
+  tableCode <- url %>% 
+    read_html() %>%
+    html_nodes(xpath = paste0('//*[@id="mw-content-text"]/div/table[', tableNum,']')) %>%
+    html_table()
+               
+  tabledf <- tableCode[[1]]
+  return(tabledf)
+}
+
+
+tableNums <- c(3:11)
+
+LanguageLookup <- ldply(tableNums, getTable, url = 'https://meta.wikimedia.org/wiki/List_of_Wikipedias')
+LanguageLookupCleaned <- LanguageLookup %>% 
+  mutate(Articles = as.numeric(gsub(",", '', Articles)))
+
+clearCommas <- colwise(gsub)
+LanguageLookupCleaned <- clearCommas()
+
+```
+
